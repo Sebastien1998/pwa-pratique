@@ -18,5 +18,8 @@
   "bugs": {
     "url": "https://github.com/Sebastien1998/pwa-pratique/issues"
   },
-  "homepage": "https://github.com/Sebastien1998/pwa-pratique#readme"
+  "homepage": "https://github.com/Sebastien1998/pwa-pratique#readme",
+  "dependencies": {
+    "web-push": "^3.4.5"
+  }
 }
