@@ -1,24 +1,79 @@
 // 4.4 Gestion du cache par le SW
 // const cacheName = 'veille-techno' + '1.1';
 // 5.4 Mise à jour du cache : les deux caches apparaissent
-const cacheName = 'veille-techno' + '1.2';
+//const cacheName = 'veille-techno' + '1.2';
+
+const cacheName = 'veille-techno' + '1.3';
+
+	
+// 9.6 Synchroniser les données au retour de la connexion
+// Ajout des imports pour les appels méthodes hors connexion
+self.importScripts('idb/idb.js', 'idb/database.js');
+
+// 9.6 Synchroniser les données au retour de la connexion
+self.addEventListener('sync', event => {
+    console.log('sync event', event);
+    // test du tag de synchronisation utilisé dans add_techno
+    if (event.tag === 'sync-technos') {
+        console.log('syncing', event.tag);
+        // Utilisation de waitUntil pour s'assurer que le code est exécuté (Attend une promise)
+        event.waitUntil(updateTechnoPromise);
+    }
+})
+
+// 9.6 Synchroniser les données au retour de la connexion
+// constante de la Promise permettant de faire la synchronisation
+const updateTechnoPromise = new Promise(function(resolve, reject) {
+ 
+    // récupération de la liste des technos de indexedDB
+    getAllTechnos().then(technos => {
+        console.log('got technos from sync callback', technos);
+        
+        // pour chaque item : appel de l'api pour l'ajouter à la base
+        technos.map(techno => {
+            console.log('Attempting fetch', techno);
+            fetch('https://us-central1-pwa-technos-desideri.cloudfunctions.net/addTechno', {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                method: 'POST',
+                body: JSON.stringify(techno)
+            })
+            .then(() => {
+                // Succès : suppression de l'item en local si ajouté en distant
+                console.log('Success update et id supprimée', techno.id);
+                return deleteTechno(techno.id);
+            })
+            .catch(err => {
+                // Erreur
+                console.log('Error update et id supprimée', err);
+                resolve(err);
+            })
+        })
+ 
+    })
+});
 
 self.addEventListener('install', (evt) => {
     console.log(`sw installé à ${new Date().toLocaleTimeString()}`);
 
     const cachePromise = caches.open(cacheName).then(cache => {
         return cache.addAll([
+            // 9.4 Ajouter les librairies iDB
+            'idb/idb.js',
+            'idb/database.js',
             'index.html',
             'main.js',
             'style.css',
             'vendors/bootstrap4.min.css',
             'add_techno.html',
             'add_techno.js',
-            'contact.html',
-            'contact.js',
+            //'contact.html',
+            //'contact.js',
         ])
-        .then(console.log('cache initialisé'))
-        .catch(console.err);
+            .then(console.log('cache initialisé'))
+            .catch(console.err);
     });
 
     evt.waitUntil(cachePromise);
@@ -30,13 +85,13 @@ self.addEventListener('install', (evt) => {
 });
 
 self.addEventListener('activate', (evt) => {
-    console.log(`sw activé à ${new Date().toLocaleTimeString()}`); 
-  
+    console.log(`sw activé à ${new Date().toLocaleTimeString()}`);
+
     // 5.4 Supprimer les anciennes instances de cache
-    let cacheCleanPromise = caches.keys().then(keys => { 
-        console.log("KEYS",keys);
-        keys.forEach(key => {            
-            if(key !== cacheName){
+    let cacheCleanPromise = caches.keys().then(keys => {
+        console.log("KEYS", keys);
+        keys.forEach(key => {
+            if (key !== cacheName) {
                 caches.delete(key);
             }
         });
@@ -46,8 +101,8 @@ self.addEventListener('activate', (evt) => {
 });
 
 self.addEventListener('fetch', (evt) => {
-    if(!navigator.onLine) {
-        const headers = { headers: { 'Content-Type': 'text/html;charset=utf-8'} };
+    if (!navigator.onLine) {
+        const headers = { headers: { 'Content-Type': 'text/html;charset=utf-8' } };
         evt.respondWith(new Response('<h1>Pas de connexion internet</h1><div>Application en mode dégradé. Veuillez vous connecter</div>', headers));
     }
 
@@ -55,7 +110,16 @@ self.addEventListener('fetch', (evt) => {
     console.log('url interceptée', evt.request.url);
 });
 
+//..
 self.addEventListener('fetch', (evt) => {
+
+    // 9.6 Synchroniser les données au retour de la connexion
+    // console.log('evt', evt);
+    // to prevent this error when posting a form: 
+    // "Uncaught (in promise) TypeError: Request method 'POST' is unsupported at caches.open.then.cache"
+    if (evt.request.method === 'POST') {
+        return;
+    }
 
     // 5.3 Stratégie de network first with cache fallback
     // On doit envoyer une réponse
@@ -68,13 +132,13 @@ self.addEventListener('fetch', (evt) => {
             // quand on a la réponse on la retourne (clone car on ne peut la lire qu'une fois)
             return res.clone();
         })
-        // Si on a une erreur et que l'on arrive pas à récupérer depuis le réseau, on va chercher dans le cache
-        .catch(err => {
-            console.log("url récupérée depuis le cache", evt.request.url);
-            return caches.match(evt.request);
-        })
+            // Si on a une erreur et que l'on arrive pas à récupérer depuis le réseau, on va chercher dans le cache
+            .catch(err => {
+                console.log("url récupérée depuis le cache", evt.request.url);
+                return caches.match(evt.request);
+            })
     );
-    
+
 
     // if(!navigator.onLine) {
     //     const headers = { headers: { 'Content-Type': 'text/html;charset=utf-8'} };
@@ -130,8 +194,8 @@ self.addEventListener("push", evt => {
     // 8.1 afficher son contenu dans une notification
     const title = evt.data.text();
     const objNotification = {
-        body: "ça fonctionne", 
-        icon : "images/icons/icon-72x72.png"
+        body: "ça fonctionne",
+        icon: "images/icons/icon-72x72.png"
     };
     self.registration.showNotification(title, objNotification);
 })
@@ -140,7 +204,7 @@ self.addEventListener("push", evt => {
 // 7.3 Notifications persistantes (envoyées depuis le service worker)
 self.registration.showNotification("Notification du SW", {
     body:"je suis une notification dite persistante",
-  
+
     // 7.4 Options de notifications grâce aux actions
     actions:[
         {action:"accept", title:"accepter"},
@@ -159,7 +223,8 @@ self.addEventListener("notificationclick", evt => {
     } else{
         console.log("vous avez cliqué sur la notification (pas sur un bouton)");
     }
-  
+
     // 7.5 Fermer programmatiquement une notification
     evt.notification.close();
 })*/
+
